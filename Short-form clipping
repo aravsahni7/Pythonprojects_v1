@@ -1,0 +1,145 @@
+import os
+import time
+from googleapiclient.discovery import build
+import subprocess
+import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+import argparse
+
+
+def parse_duration(iso_duration):
+    match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration)
+    hours = int(match.group(1)) if match.group(1) else 0
+    minutes = int(match.group(2)) if match.group(2) else 0
+    seconds = int(match.group(3)) if match.group(3) else 0
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def fetch_popular_videos(youtube, max_results=10):
+    request = youtube.videos().list(
+        part="snippet,contentDetails,statistics",
+        chart="mostPopular",
+        regionCode="US",
+        maxResults=max_results,
+    )
+    response = request.execute()
+    videos = []
+    for video in response['items']:
+        if video['snippet'].get('defaultAudioLanguage', 'en') == 'en':
+            video_info = {
+                'title': video['snippet']['title'],
+                'video_id': video['id'],
+                'duration': parse_duration(video['contentDetails']['duration'])
+            }
+            videos.append(video_info)
+    return videos
+
+
+def wait_for_ads_and_popups(driver):
+    wait = WebDriverWait(driver, 60)
+    time.sleep(5)
+    while True:
+        try:
+            ad_skip_button = driver.find_elements(By.CLASS_NAME, "ytp-ad-skip-button")
+            if ad_skip_button:
+                ad_skip_button[0].click()
+                print("Skipped an ad.")
+
+            ad_indicator = driver.find_elements(By.CLASS_NAME, "ytp-ad-text")
+            if ad_indicator:
+                print("Ad detected, waiting...")
+                time.sleep(5)
+
+            premium_popup = driver.find_elements(By.XPATH, "//tp-yt-paper-dialog[@id='upsell-dialog']")
+            if premium_popup:
+                close_button = premium_popup[0].find_elements(By.XPATH, ".//yt-icon-button[@id='close-button']")
+                if close_button:
+                    close_button[0].click()
+                    print("Closed YouTube Premium trial popup.")
+
+            if not ad_skip_button and not ad_indicator and not premium_popup:
+                print("No ads or pop-ups detected, ready to start recording.")
+                break
+
+            time.sleep(1)
+        except Exception as e:
+            print(f"Error handling ads/popups: {e}")
+            break
+
+
+def play_video_in_browser(video_url, start_time):
+    driver = webdriver.Chrome()  # Adjust path or options as needed
+    driver.get(video_url)
+    wait_for_ads_and_popups(driver)
+
+    try:
+        driver.execute_script(f"document.getElementById('movie_player').seekTo({start_time}, true);")
+        fullscreen_button = driver.find_element(By.CSS_SELECTOR, ".ytp-fullscreen-button")
+        fullscreen_button.click()
+        print("Video playback is ready.")
+        return driver
+    except Exception as e:
+        print(f"Error: {e}")
+        driver.quit()
+
+
+def record_screen_with_audio(duration, output_file=None):
+    if output_file is None:
+        output_file = os.path.expanduser('~/Downloads/output_default.mp4')
+
+    subprocess.call([
+        '/opt/homebrew/bin/ffmpeg',  # Adjust this path based on your installation
+        '-y',
+        '-f', 'avfoundation',
+        '-thread_queue_size', '8192',
+        '-i', "1:0",  # Video and audio input (adjust as necessary)
+        '-c:v', 'h264_videotoolbox',  # Hardware-accelerated video encoding for macOS
+        '-preset', 'medium',  # Default encoding speed
+        '-video_size', '1440x900',  # Adjust based on your screen resolution
+        '-framerate', '30',  # Common frame rate
+        '-c:a', 'aac',  # Standard audio codec
+        '-b:a', '128k',  # Default audio bitrate
+        '-ar', '44100',  # Default sample rate
+        '-t', str(duration),
+        output_file
+    ])
+
+
+def capture_video(video_url, output_file, duration, start_time):
+    driver = play_video_in_browser(video_url, start_time)
+    record_screen_with_audio(duration, output_file)
+    driver.quit()
+
+
+def main(max_results, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    API_KEY = "AIzaSyAkX-Wbi5kELJQW8M-RtTyV9IKaE_RuRXo"  # Replace with your actual API key
+    youtube = build('youtube', 'v3', developerKey=API_KEY)
+    popular_videos = fetch_popular_videos(youtube, max_results)
+
+    if not popular_videos:
+        print("No popular videos found.")
+        return
+
+    for i, popular_video in enumerate(popular_videos):
+        print(f"Processing: {popular_video['title']}")
+        try:
+            video_url = f"https://www.youtube.com/watch?v={popular_video['video_id']}"
+            output_file = f"{output_dir}/video_{i}.mp4"
+            video_duration = popular_video['duration']
+            start_time = video_duration // 2
+            record_duration = 60  # Record for 1 minute
+            capture_video(video_url, output_file, record_duration, start_time)
+            print(f"Recorded: {output_file}")
+        except Exception as e:
+            print(f"Error recording video {popular_video['title']}: {e}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="YouTube video recording tool")
+    parser.add_argument('-m', '--max_results', type=int, default=10, help='Maximum number of results')
+    parser.add_argument('-o', '--output_dir', default='output', help='Output directory')
+    args = parser.parse_args()
+    main(args.max_results, args.output_dir)
