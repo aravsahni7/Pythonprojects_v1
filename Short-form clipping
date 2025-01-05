@@ -106,6 +106,48 @@ def record_screen_with_audio(duration, output_file=None):
         output_file
     ])
 
+def slice_video_into_segments(input_file, segment_duration, output_dir):
+    """Slices the video into segments of specified duration."""
+    os.makedirs(output_dir, exist_ok=True)
+    try:
+        duration = float(subprocess.check_output([
+            'ffprobe',
+            '-i', input_file,
+            '-show_entries', 'format=duration',
+            '-v', 'quiet',
+            '-of', 'csv=p=0'
+        ]).strip().decode('utf-8'))
+    except ValueError as e:
+        print(f"Error parsing video duration: {e}")
+        return
+
+    for i in range(0, int(duration), segment_duration):
+        output_file = os.path.join(output_dir, f"segment_{i // segment_duration + 1}.mp4")
+        subprocess.call([
+            'ffmpeg',
+            '-i', input_file,
+            '-ss', str(i),
+            '-t', str(segment_duration),
+            '-c', 'copy',
+            output_file
+        ])
+        print(f"Created segment: {output_file}")
+
+def capture_gameplay_video():
+    """Prompts the user for a gameplay video link and processes it."""
+    video_url = input("Enter the YouTube video link for gameplay: ")
+    output_file = "gameplay_recording.mp4"
+    output_dir = "gameplay_segments"
+
+    # Record for 10 minutes
+    duration = 10 * 60
+    driver = play_video_in_browser(video_url, 0)
+    record_screen_with_audio(duration, output_file)
+    driver.quit()
+
+    # Slice into 1-minute segments
+    slice_video_into_segments(output_file, 60, output_dir)
+
 
 def capture_video(video_url, output_file, duration, start_time):
     driver = play_video_in_browser(video_url, start_time)
@@ -136,6 +178,8 @@ def main(max_results, output_dir):
         except Exception as e:
             print(f"Error recording video {popular_video['title']}: {e}")
 
+    capture_gameplay_video()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="YouTube video recording tool")
@@ -143,3 +187,4 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output_dir', default='output', help='Output directory')
     args = parser.parse_args()
     main(args.max_results, args.output_dir)
+
