@@ -1,0 +1,129 @@
+import math
+import turtle
+
+"""
+Our goal is to let the user toss an abandoned turtle into a pond of water
+We, the programmers will track the trajectory of the turtle and let the user 
+know if they succeeded.
+"""
+
+
+# ======================================================================
+# helpful functions
+# ======================================================================
+
+def get_turtle_land_dimensions() -> tuple[int, int, int, int]:
+    screen_width, screen_height = turtle.screensize()
+    return -screen_width, -screen_height, screen_width, screen_height
+
+
+# ======================================================================
+# Constants
+# ======================================================================
+EARTH_GRAVITY: float = 9.807  # Earth  (m/s^2)
+
+# turtle land dimensions
+(X_MIN, Y_MIN, X_MAX, Y_MAX) = get_turtle_land_dimensions()
+GROUND_LEVEL = -100  # the y value of the ground level
+POND_X1 = 350
+POND_Y1 = 0
+POND_X2 = 250
+POND_Y2 = GROUND_LEVEL
+
+# turtle initial position
+X_START: int = X_MIN + 50
+Y_START: int = GROUND_LEVEL
+
+# set up some turtle defaults
+turtle.speed(0)
+turtle.resizemode('user')
+turtle.shapesize(2, 2, 3)
+
+
+# ======================================================================
+# Your code goes here
+# ======================================================================
+def rectangle(x1, y1, x2, y2, colour):
+    turtle.penup()
+    turtle.goto(x1, y1)
+    turtle.pendown()
+    turtle.color(colour)
+    turtle.begin_fill()
+    for _ in range(2):
+        turtle.forward(x2-x1)
+        turtle.left(90)
+        turtle.forward(y2-y1)
+        turtle.left(90)
+    turtle.end_fill()
+    turtle.penup()
+
+def in_rectangle(x: float, y: float, x1: int, y1: int, x2: int, y2: int) -> bool:
+    return x2 <= x <= x1 and y2 <= y <= y1
+
+def hit_ground(y: float, ground_y: int) -> bool:
+    return y <= ground_y
+
+def hit_wall(x: float, y: float, x1: int, y1: int, x2: int, y2: int) -> bool:
+    tolerance = 10
+    return (abs(x - x1) <= tolerance and y2 <= y <= y1) or (abs(x - x2) <= tolerance and y2 <= y <= y1)
+
+def output(message: str):
+    turtle.penup()
+    turtle.goto(-50, 250)  # Adjust x and y coordinates as needed
+    turtle.pendown()
+    turtle.write(message, font=("Arial", 16, "bold"))
+    turtle.penup()
+
+
+def simulate_throw():
+    turtle.shape("turtle")
+    turtle.color("orange", "green")
+    turtle.resizemode('user')
+    turtle.shapesize(2, 2, 3)
+    turtle.goto(X_START, Y_START)
+    velocity_magnitude = int(input("Enter the velocity (m/s): "))
+    angle_deg = int(input("Enter the angle from the ground (degrees): "))
+    angle_rad = math.radians(angle_deg)
+    velocity_x = velocity_magnitude * math.cos(angle_rad)
+    velocity_y = velocity_magnitude * math.sin(angle_rad)
+    turtle.setheading(angle_deg)
+    turtle.pendown()
+    turtle.pencolor("orange")
+    time = 0.5
+    x_pos = X_START
+    y_pos = Y_START
+    for _ in range(10000):
+        x_pos += velocity_x * time
+        y_pos += velocity_y * time
+        velocity_y -= EARTH_GRAVITY * time
+        turtle.goto(x_pos, y_pos)
+        current_angle = math.degrees(math.atan2(velocity_y, velocity_x))
+        turtle.setheading(current_angle)
+        if hit_wall(x_pos, y_pos, POND_X1, POND_Y1, POND_X2, POND_Y2):
+            output("OMG! You hit a wall")
+            turtle.goto(x_pos, y_pos)
+            break
+        elif in_rectangle(x_pos, y_pos, POND_X1, POND_Y1, POND_X2, POND_Y2):
+            output("YAY, you have saved the turtle!")
+            turtle.goto(x_pos, y_pos)
+            break
+        elif hit_ground(y_pos, GROUND_LEVEL):
+            output("Too bad, your turtle will never find happiness.")
+            turtle.goto(x_pos, y_pos)
+            break
+
+
+
+def main():
+    rectangle(X_MIN, GROUND_LEVEL-100000, X_MAX, GROUND_LEVEL, "brown")
+    rectangle(POND_X1, POND_Y1, POND_X2, POND_Y2, "blue")
+    simulate_throw()
+
+
+
+# ======================================================================
+# IMPORTANT: don't change the code below this point:
+# ======================================================================
+if __name__ == "__main__":
+    main()
+    turtle.mainloop()
