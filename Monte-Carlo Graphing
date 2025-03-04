@@ -1,0 +1,113 @@
+"""
+Use the monte-carlo method to estimate the relationship between the area
+of a circle, and the radius of the circle
+"""
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+
+MAKE_MONTE_CARLO_PLOT = False
+NUMBER_OF_ROCKS = 100000
+MIN_RADIUS: int = 10
+MAX_RADIUS: int = 50
+
+
+def estimate_area_of_circle(radius) -> float:
+    """
+    Estimate the area of a circle based on the ratio of the number of rocks that fell
+    within the circle to the number of rocks that fell in the square
+    :param radius: radius of the circle, half the width of the square
+    :return: the estimated area of the circle
+    """
+    xdata_outside: list[float] = []
+    ydata_outside: list[float] = []
+    xdata_inside: list[float] = []
+    ydata_inside: list[float] = []
+
+    for _ in range(NUMBER_OF_ROCKS):
+        x = random.uniform(-radius, radius)
+        y = random.uniform(-radius, radius)
+
+        if x**2 + y**2 <= radius**2:
+            xdata_inside.append(x)
+            ydata_inside.append(y)
+        else:
+            xdata_outside.append(x)
+            ydata_outside.append(y)
+
+    ratio = len(xdata_inside) / NUMBER_OF_ROCKS
+    square_area = (2 * radius) ** 2
+    area_of_circle = ratio * square_area
+
+    if MAKE_MONTE_CARLO_PLOT:
+        plot_monte_carlo(xdata_inside, ydata_inside, xdata_outside, ydata_outside)
+    return area_of_circle
+
+
+def self_testing():
+    """
+    Ask the user for the radius of the circle
+    Estimate the area, and print that estimate to the console.
+    Compare with what you know should be the area of the circle.
+    """
+    radius: int = int(input("Enter the radius of the circle: "))
+    area = estimate_area_of_circle(radius)
+    print(f"Estimated area is {area}")
+    actual_area = np.pi * (radius ** 2)
+    print(f"Actual area is {actual_area}")
+    print(f"Error: {abs(area - actual_area)}")
+    print(f"Percentage error: {abs(area - actual_area)/actual_area*100:.2f}%")
+
+
+
+def estimate_pi():
+    """By estimating the area of circles with different radii, and fitting the
+    resulting data to a curve, we can estimate the formula:
+    Area = p0*x^2 + p1*x + p2
+    Plot the data.
+    """
+    areas = []
+    radii = []
+    for radius in range(MIN_RADIUS, MAX_RADIUS+1):
+        radii.append(radius)
+        areas.append(estimate_area_of_circle(radius))
+    p = np.polyfit(radii, areas, 2)
+    yfit = [p[0] * x ** 2 + p[1] * x + p[2] for x in radii]
+    plt.plot(radii, areas, 'x')
+    plt.plot(radii, yfit, '-')
+    plt.xlabel('Radius')
+    plt.ylabel('Circle Area')
+    plt.title(f'A = {p[0]:.3f}x^2 + {p[1]:.3f}x + {p[2]:.3f}')
+    plt.show()
+
+
+def plot_monte_carlo(xdata_inside: list[float], ydata_inside: list[float],
+                     xdata_outside: list[float], ydata_outside: list[float]):
+    """Plot the results of the rock throwing"""
+
+    # Note: this code is a little more sophisticated than what you need to
+    #       for the plot in "estimate_pi", because I want the aspect ratios
+    #       to be the same (otherwise the circle ends up looking like an oval)
+
+    _, axes = plt.subplots()
+
+    # random rocks
+    axes.plot(xdata_inside, ydata_inside, 'b.', markersize=1)
+    axes.plot(xdata_outside, ydata_outside, 'r.', markersize=1)
+    plt.ylabel("y")
+    plt.xlabel("x")
+    plt.title("Random Rocks")
+
+    axes.set_aspect('equal', adjustable='box')
+    plt.show()
+
+
+if __name__ == "__main__":
+
+    # force the answers always to be the same
+    random.seed(1234567)
+
+    # comment or uncomment as required
+    estimate_pi()
+    MAKE_MONTE_CARLO_PLOT = True
+    #self_testing()
