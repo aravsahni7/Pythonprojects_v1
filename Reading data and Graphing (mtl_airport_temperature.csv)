@@ -1,0 +1,109 @@
+import csv
+from typing import Optional
+import matplotlib.pyplot as plt
+import numpy as np
+from csv_temperature_indices import YEAR, MONTH, DAY, MAX_TEMP
+
+# =============================================================================
+# create lists to store the data read from the CSV file
+# =============================================================================
+data_year: list = []
+data_month: list = []
+data_day: list = []
+data_max: list = []
+
+
+# =============================================================================
+# read data
+# =============================================================================
+def read_csv(file_name: str):
+    """
+    read in the temperature data, making sure to ignore data that is incomplete
+    """
+    with open(file_name, "r") as fh:
+        csv_file: csv.reader = csv.reader(fh)
+        next(csv_file)
+        for line in csv_file:
+            if line[MAX_TEMP] != "":
+                data_year.append(line[YEAR])
+                data_month.append(line[MONTH])
+                data_day.append(line[DAY])
+                data_max.append(line[MAX_TEMP])
+
+# =============================================================================
+# get the maximum temperature for a specific day
+# - assume that the data for this day exists
+# =============================================================================
+def get_max_temperatures_on_specific_day(this_year, this_month, this_day) -> float:
+    """Find the maximum temperature on a given year/month/day"""
+    for y, m, d, t in zip(data_year, data_month, data_day, data_max):
+        if y == str(this_year) and m == str(this_month) and d == str(this_day):
+            return float(t)
+
+
+
+# =============================================================================
+# for each year, calculate the average temperature (by month or by year)
+# if there is no data for this year and month,
+#     return None
+# =============================================================================
+def temperature_max_average_for_year_month(this_year: int, this_month: int) -> Optional[float]:
+    """Calculate the averages of maximum daily temperatures for a given month
+    Note: returns None if there are no records for this year/month
+    """
+    temps_for_year_month = [float(t) for y, m, t in zip(data_year, data_month, data_max) if y == str(this_year) and m == str(this_month)]
+    average = sum(temps_for_year_month) / len(temps_for_year_month) if temps_for_year_month else None
+    print("Average of the maximum temperatures in month", this_month,"of", this_year, "is", average)
+    return average
+
+# =============================================================================
+# main program
+# =============================================================================
+def main(file_name: str):
+    """get specific info, and plot data"""
+
+    # Part 1
+    read_csv(file_name)
+    # Part 2
+    print("Data starts in year:", data_year[0])
+    print("Data ends in year:", data_year[-1])
+    temp_1960 = get_max_temperatures_on_specific_day(1960, 4, 18)
+    print("The maximum temperature on April 18, 1960 was:", temp_1960)
+
+    # Part 3
+    years = (sorted(set(map(int, data_year))))
+    jan_averages = [temperature_max_average_for_year_month(int(i), 1) for i in years]
+    july_averages = [temperature_max_average_for_year_month(int(i), 7) for i in years]
+    plt.plot( years, jan_averages, 'bx', label="January Data")
+    plt.plot( years, july_averages, 'ro', label="July Data")
+    plt.title("July and January in Montreal")
+    plt.xlabel("Year")
+    plt.ylabel("Maximum Average Temperature (°C)")
+    # Part 4
+    cleaned_years_july, cleaned_july_temperatures = clean_data(years, july_averages)
+    p: np.ndarray = np.polyfit(cleaned_years_july, cleaned_july_temperatures, 1)
+    july_fit = [p[0] * x + p[1] for x in cleaned_years_july]
+    plt.plot(cleaned_years_july, july_fit, "r")
+    cleaned_years_jan, cleaned_jan_temperatures = clean_data(years, jan_averages)
+    p: np.ndarray = np.polyfit(cleaned_years_jan, cleaned_jan_temperatures, 1)
+    jan_fit = [p[0] * x + p[1] for x in cleaned_years_jan]
+    plt.plot(cleaned_years_jan, jan_fit, "b")
+    plt.show()
+# =============================================================================
+# function to "clean" data before using polyfit
+# =============================================================================
+def clean_data(years, temperatures):
+    clean_years = []
+    clean_temperatures = []
+    for year, temperature in zip(years, temperatures):
+        if temperature is not None:
+            clean_years.append(int(year))
+            clean_temperatures.append(float(temperature))
+    return clean_years, clean_temperatures
+
+# =============================================================================
+# Entry point
+# ... do not add or modify ANY code below
+# =============================================================================
+if __name__ == "__main__":
+    main("mtl_airport_temperature.csv")
